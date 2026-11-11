@@ -16,7 +16,7 @@ CURRENT=$(cat "$ROOT/deployed-revision" 2>/dev/null || true)
 git merge --ff-only "$TARGET"
 # Existing Frappe base and Python dependencies stay pinned. Dependency upgrades require review.
 if [ -n "$CURRENT" ]; then
-  if ! git diff --quiet "$CURRENT" "$TARGET" -- pyproject.toml package.json yarn.lock; then
+  if ! git diff --quiet "$CURRENT" "$TARGET" -- pyproject.toml package.json yarn.lock banking/package.json banking/yarn.lock; then
     echo 'Dependency changes require a reviewed base image update'; exit 1
   fi
 fi
