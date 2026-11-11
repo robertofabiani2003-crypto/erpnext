@@ -1,0 +1,98 @@
+name: erpnext
+x-app: &app
+  image: local/erpnext-fork:approved
+  pull_policy: never
+  restart: unless-stopped
+  volumes:
+    - sites:/home/frappe/frappe-bench/sites
+    - logs:/home/frappe/frappe-bench/logs
+  depends_on:
+    configurator:
+      condition: service_completed_successfully
+services:
+  db:
+    image: mariadb:11.8
+    restart: unless-stopped
+    mem_limit: 640m
+    command: [--character-set-server=utf8mb4, --collation-server=utf8mb4_unicode_ci, --skip-character-set-client-handshake, --innodb-snapshot-isolation=OFF, --innodb-buffer-pool-size=256M, --max-connections=80]
+    environment:
+      MARIADB_ROOT_PASSWORD_FILE: /run/secrets/db_password
+    secrets: [db_password]
+    volumes: [db-data:/var/lib/mysql]
+    healthcheck:
+      test: [CMD, healthcheck.sh, --connect, --innodb_initialized]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  redis-cache:
+    image: redis:8.6-alpine
+    restart: unless-stopped
+    mem_limit: 160m
+    command: [redis-server, --maxmemory, 96mb, --maxmemory-policy, allkeys-lru]
+  redis-queue:
+    image: redis:8.6-alpine
+    restart: unless-stopped
+    mem_limit: 192m
+    command: [redis-server, --appendonly, 'yes']
+    volumes: [redis-queue-data:/data]
+  configurator:
+    <<: *app
+    restart: on-failure
+    mem_limit: 384m
+    depends_on:
+      db: {condition: service_healthy}
+      redis-cache: {condition: service_started}
+      redis-queue: {condition: service_started}
+    entrypoint: [bash, -c]
+    command:
+      - >
+        ls -1 apps > sites/apps.txt &&
+        bench set-config -g db_host db &&
+        bench set-config -gp db_port 3306 &&
+        bench set-config -g redis_cache redis://redis-cache:6379 &&
+        bench set-config -g redis_queue redis://redis-queue:6379 &&
+        bench set-config -g redis_socketio redis://redis-queue:6379 &&
+        bench set-config -gp socketio_port 9000
+  backend:
+    <<: *app
+    mem_limit: 768m
+    environment:
+      GUNICORN_WORKERS: '2'
+      GUNICORN_THREADS: '2'
+  frontend:
+    <<: *app
+    mem_limit: 128m
+    command: [nginx-entrypoint.sh]
+    ports: [127.0.0.1:18090:8080]
+    environment:
+      BACKEND: backend:8000
+      SOCKETIO: websocket:9000
+      FRAPPE_SITE_NAME_HEADER: wms.admin-svoyo.shop
+      UPSTREAM_REAL_IP_ADDRESS: 127.0.0.1
+      UPSTREAM_REAL_IP_HEADER: X-Forwarded-For
+      UPSTREAM_REAL_IP_RECURSIVE: 'off'
+    depends_on: [backend, websocket]
+  websocket:
+    <<: *app
+    mem_limit: 192m
+    command: [node, /home/frappe/frappe-bench/apps/frappe/socketio.js]
+  queue-short:
+    <<: *app
+    mem_limit: 512m
+    command: [bench, worker, --queue, 'short,default']
+  queue-long:
+    <<: *app
+    mem_limit: 512m
+    command: [bench, worker, --queue, long]
+  scheduler:
+    <<: *app
+    mem_limit: 256m
+    command: [bench, schedule]
+volumes:
+  sites:
+  logs:
+  db-data:
+  redis-queue-data:
+secrets:
+  db_password:
+    file: ./db-password

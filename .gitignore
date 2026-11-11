@@ -23,3 +23,11 @@ node_modules/
 # Banking SPA
 erpnext/public/banking
 erpnext/www/banking.html
+
+# Private deployment state stays on the server, never in Git.
+/deploy/secrets.json
+/deploy/db-password
+/deploy/.env
+/deploy/*.log
+/deploy/sites/
+/deploy/backups/

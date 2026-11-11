@@ -1,0 +1,3 @@
+[submodule "vendor/frappe_docker"]
+	path = vendor/frappe_docker
+	url = https://github.com/frappe/frappe_docker.git
