@@ -8,7 +8,7 @@ exec 9>$ROOT/auto-deploy.lock
 flock -n 9 || exit 0
 cd "$SOURCE"
 test -z "$(git status --porcelain --untracked-files=normal)" || { echo 'Checkout has local changes; refusing deployment'; exit 1; }
-git fetch origin version-16
+git fetch origin refs/heads/version-16:refs/remotes/origin/version-16
 TARGET=$(git rev-parse origin/version-16)
 CURRENT=$(cat "$ROOT/deployed-revision" 2>/dev/null || true)
 [ "$TARGET" != "$CURRENT" ] || exit 0
